@@ -21,19 +21,19 @@ func main() {
 	}
 
 	// Connect to MongoDB
-	client := database.Connect()
-
+	
 	// Enable CORS
 	router.Use(cors.Default())
-
+	
 	// Test route
 	router.GET("/hello", func(c *gin.Context) {
 		c.String(200, "Hello, Coupon meal system!")
 	})
-
+	
+	client := database.Connect()
 	// Setup routes
 	routes.SetupUnProtectedRoutes(router, client)
-	// routes.SetupProtectedRoutes(router, client)
+	routes.SetupProtectedRoutes(router, client)
 
 	// Start server
 	if err := router.Run(":8080"); err != nil {

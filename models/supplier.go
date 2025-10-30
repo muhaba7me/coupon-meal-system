@@ -2,12 +2,12 @@ package models
 
 import (
 	"time"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type Supplier struct {
-	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	UserID         primitive.ObjectID `bson:"user_id" json:"user_id"`
+	ID           bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID       bson.ObjectID `bson:"user_id" json:"user_id"`
 	BusinessName   string             `bson:"business_name" json:"business_name" binding:"required"`
 	BusinessLicense string            `bson:"business_license,omitempty" json:"business_license,omitempty"`
 	Address        string             `bson:"address" json:"address" binding:"required"`

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -93,18 +94,18 @@ func UpdateAllTokens(userId, token, refreshToken string, client *mongo.Client) (
 
 func GetAccessToken(c *gin.Context) (string, error) {
 
-	// authHeader := c.Request.Header.Get("Authorization")
-	// if authHeader == "" {
-	// 	return "", errors.New("authorization header is required")
-	// }
-	// tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	// if tokenString == "" {
-	// 	return "", errors.New("bearer token is required")
-	// }
-	tokenString, err := c.Cookie("access_token")
-if err !=nil{
- return "", err
-}
+	authHeader := c.Request.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("authorization header is required")
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	if tokenString == "" {
+		return "", errors.New("bearer token is required")
+	}
+	// tokenString, err := c.Cookie("access_token")
+// if err !=nil{
+//  return "", err
+// }
 	return tokenString, nil
 }
 
