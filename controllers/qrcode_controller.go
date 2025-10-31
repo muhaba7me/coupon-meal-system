@@ -21,8 +21,6 @@ import (
 
 func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
 	return func(c *gin.Context){
-		//get employee ID from JWT token 
-
 		employeeUserID, err := utils.GetUserIdFromContext(c)
 		if err !=nil{
 			c.JSON(http.StatusUnauthorized, gin.H{"error":"Unauthorized"})
@@ -99,4 +97,119 @@ func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
 			EmployeeBalance:  employee.CurrentBalance,
 		})
 }
+}
+
+func ValidateQRcode(client *mongo.Client) gin.HandlerFunc{
+	return func(c *gin.Context) {
+		var req models.ValidateQRRequest
+			if err:=c.ShouldBindJSON(&req); err!=nil{
+				c.JSON(http.StatusBadRequest, gin.H{"error":"Invaild request"})
+				return 
+			}
+         var ctx, cancel = context.WithTimeout(c, 100*time.Second)
+		 defer cancel()
+		 //find Qr Code 
+		 qrCollection := database.OpenCollection("qr_codes", client)
+		 var qrCodeRecord models.QRCode
+		 err := qrCollection.FindOne(ctx, bson.D{{Key: "code", Value: req.Code}}).Decode(&qrCodeRecord)
+		 if err !=nil{
+			c.JSON(http.StatusOK,models.ValidateQRResponse{
+				Valid: false,
+				Message: "Invaild QR code",
+			})
+			return 
+		 }
+		 // Check if expired
+		if time.Now().After(qrCodeRecord.ExpiresAt) {
+			c.JSON(http.StatusOK, models.ValidateQRResponse{
+				Valid:   false,
+				Message: "QR code expired",
+			})
+			return
+		}
+
+		// Get employee details
+		employeeCollection := database.OpenCollection("employees", client)
+		var employee models.Employee
+		err = employeeCollection.FindOne(ctx, bson.D{{Key: "employee_id", Value: qrCodeRecord.EmployeeID}}).Decode(&employee)
+		if err != nil {
+			c.JSON(http.StatusOK, models.ValidateQRResponse{
+				Valid:   false,
+				Message: "Employee not found",
+			})
+			return
+		}
+			// Check employee status
+		if employee.Status != "active" && employee.Status != "on_leave" {
+			c.JSON(http.StatusOK, models.ValidateQRResponse{
+				Valid:   false,
+				Message: "Employee account is not active",
+			})
+			return
+		}
+
+		// Check balance
+		if employee.CurrentBalance <= 0 {
+			c.JSON(http.StatusOK, models.ValidateQRResponse{
+				Valid:   false,
+				Message: "Employee has no coupons available",
+			})
+			return
+		}
+		// Return valid response with employee info
+		c.JSON(http.StatusOK, models.ValidateQRResponse{
+			Valid:          true,
+			EmployeeID:     employee.EmployeeID,
+			EmployeeName:   employee.Name,
+			EmployeeCode:   employee.EmployeeCode,
+			CurrentBalance: employee.CurrentBalance,
+			QRCodeID:       qrCodeRecord.QRCodeID,
+			ExpiresAt:      qrCodeRecord.ExpiresAt,
+			Message:        "QR code is valid",
+		})
+	
+		
+	}
+}
+// GetMyQRCodes - Get employee's QR code history
+func GetMyQRCodes(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		employeeUserID, err := utils.GetUserIdFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		var ctx, cancel = context.WithTimeout(c, 100*time.Second)
+		defer cancel()
+
+		// Get employee
+		employeeCollection := database.OpenCollection("employees", client)
+		var employee models.Employee
+		err = employeeCollection.FindOne(ctx, bson.D{{Key: "user_id", Value: employeeUserID}}).Decode(&employee)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found"})
+			return
+		}
+
+		// Get QR codes
+		qrCollection := database.OpenCollection("qr_codes", client)
+		cursor, err := qrCollection.Find(ctx, bson.D{{Key: "employee_id", Value: employee.EmployeeID}})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch QR codes"})
+			return
+		}
+		defer cursor.Close(ctx)
+
+		var qrCodes []models.QRCode
+		if err = cursor.All(ctx, &qrCodes); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode QR codes"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"qr_codes": qrCodes,
+			"total":    len(qrCodes),
+		})
+	}
 }
