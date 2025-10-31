@@ -2,9 +2,9 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
-		"encoding/base64"
 	"os"
 	"strconv"
 	"time"
@@ -14,25 +14,25 @@ import (
 	"github.com/muhaba7me/coupon-meal-system/database"
 	"github.com/muhaba7me/coupon-meal-system/models"
 	"github.com/muhaba7me/coupon-meal-system/utils"
+	qrcode "github.com/skip2/go-qrcode"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	qrcode "github.com/skip2/go-qrcode"
 )
 
-func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
-	return func(c *gin.Context){
+func GenerateQrCode(client *mongo.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		employeeUserID, err := utils.GetUserIdFromContext(c)
-		if err !=nil{
-			c.JSON(http.StatusUnauthorized, gin.H{"error":"Unauthorized"})
-			return 
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
 		}
 		var ctx, cancel = context.WithTimeout(c, 100*time.Second)
 
 		defer cancel()
-		//get employee details 
+		//get employee details
 		employeeCollection := database.OpenCollection("employees", client)
 		var employee models.Employee
-			err = employeeCollection.FindOne(ctx, bson.D{{Key: "user_id", Value: employeeUserID}}).Decode(&employee)
+		err = employeeCollection.FindOne(ctx, bson.D{{Key: "user_id", Value: employeeUserID}}).Decode(&employee)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found"})
 			return
@@ -46,9 +46,9 @@ func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
 			c.JSON(http.StatusForbidden, gin.H{"error": "No coupons available"})
 			return
 		}
-			// Generate unique QR code
+		// Generate unique QR code
 		qrCodeUUID := uuid.New().String()
-		
+
 		// Get expiry minutes from env or default to 15
 		expiryMinutes := 15
 		if expiryStr := os.Getenv("QR_EXPIRY_MINUTES"); expiryStr != "" {
@@ -67,8 +67,7 @@ func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
 			CreatedAt:  time.Now(),
 		}
 
-		
-	// Save to database
+		// Save to database
 		qrCollection := database.OpenCollection("qr_codes", client)
 		_, err = qrCollection.InsertOne(ctx, qrCodeRecord)
 		if err != nil {
@@ -82,9 +81,9 @@ func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate QR image"})
 			return
-		
-	}
-	// Convert to base64
+
+		}
+		// Convert to base64
 		base64Image := base64.StdEncoding.EncodeToString(qrImage)
 
 		// Return response
@@ -96,30 +95,30 @@ func GenerateQrCode(client *mongo.Client) gin.HandlerFunc{
 			ExpiresInMinutes: expiryMinutes,
 			EmployeeBalance:  employee.CurrentBalance,
 		})
-}
+	}
 }
 
-func ValidateQRcode(client *mongo.Client) gin.HandlerFunc{
+func ValidateQRcode(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.ValidateQRRequest
-			if err:=c.ShouldBindJSON(&req); err!=nil{
-				c.JSON(http.StatusBadRequest, gin.H{"error":"Invaild request"})
-				return 
-			}
-         var ctx, cancel = context.WithTimeout(c, 100*time.Second)
-		 defer cancel()
-		 //find Qr Code 
-		 qrCollection := database.OpenCollection("qr_codes", client)
-		 var qrCodeRecord models.QRCode
-		 err := qrCollection.FindOne(ctx, bson.D{{Key: "code", Value: req.Code}}).Decode(&qrCodeRecord)
-		 if err !=nil{
-			c.JSON(http.StatusOK,models.ValidateQRResponse{
-				Valid: false,
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invaild request"})
+			return
+		}
+		var ctx, cancel = context.WithTimeout(c, 100*time.Second)
+		defer cancel()
+		//find Qr Code
+		qrCollection := database.OpenCollection("qr_codes", client)
+		var qrCodeRecord models.QRCode
+		err := qrCollection.FindOne(ctx, bson.D{{Key: "code", Value: req.Code}}).Decode(&qrCodeRecord)
+		if err != nil {
+			c.JSON(http.StatusOK, models.ValidateQRResponse{
+				Valid:   false,
 				Message: "Invaild QR code",
 			})
-			return 
-		 }
-		 // Check if expired
+			return
+		}
+		// Check if expired
 		if time.Now().After(qrCodeRecord.ExpiresAt) {
 			c.JSON(http.StatusOK, models.ValidateQRResponse{
 				Valid:   false,
@@ -139,7 +138,7 @@ func ValidateQRcode(client *mongo.Client) gin.HandlerFunc{
 			})
 			return
 		}
-			// Check employee status
+		// Check employee status
 		if employee.Status != "active" && employee.Status != "on_leave" {
 			c.JSON(http.StatusOK, models.ValidateQRResponse{
 				Valid:   false,
@@ -167,10 +166,10 @@ func ValidateQRcode(client *mongo.Client) gin.HandlerFunc{
 			ExpiresAt:      qrCodeRecord.ExpiresAt,
 			Message:        "QR code is valid",
 		})
-	
-		
+
 	}
 }
+
 // GetMyQRCodes - Get employee's QR code history
 func GetMyQRCodes(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
