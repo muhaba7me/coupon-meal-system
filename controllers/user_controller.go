@@ -28,31 +28,35 @@ func HashPassword(password string) (string, error) {
 
 func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var user models.User
+         adminRole, _ := utils.GetRoleFromContext(c)
+		 if adminRole !="ADMIN"{
+			c.JSON(http.StatusForbidden, gin.H{"error":"Admin access required"})
+			return 
+		 }
+		 var userRequest models.UserRequest
+		 if err := c.ShouldBindJSON(&userRequest); err!=nil{
+			c.JSON(http.StatusBadRequest, gin.H{"error":"Invalid input data"})
+		 }
 
-		if err := c.ShouldBindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input data"})
-			return
-		}
+	
 		validate := validator.New()
 
-		if err := validate.Struct(user); err != nil {
+		if err := validate.Struct(userRequest); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed", "details": err.Error()})
 			return
 		}
 
-		hashedPassword, err := HashPassword(user.Password)
+		hashedPassword, err := HashPassword(userRequest.Password)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to hash password"})
 			return
 		}
-
-		var ctx, cancel = context.WithTimeout(c, 100*time.Second)
+	var ctx, cancel = context.WithTimeout(c, 100*time.Second)
 		defer cancel()
-		var userCollection *mongo.Collection = database.OpenCollection("users", client)
+var userCollection *mongo.Collection = database.OpenCollection("users", client)
 
-		count, err := userCollection.CountDocuments(ctx, bson.D{{Key: "email", Value: user.Email}})
+		count, err := userCollection.CountDocuments(ctx, bson.D{{Key: "email", Value: userRequest.Email}})
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
@@ -62,19 +66,36 @@ func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 			c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 			return
 		}
-		user.UserID = bson.NewObjectID().Hex()
-		user.CreatedAt = time.Now()
-		user.UpdatedAt = time.Now()
-		user.Password = hashedPassword
 
-		result, err := userCollection.InsertOne(ctx, user)
+        user := models.User{
+			UserID: bson.NewObjectID().Hex(),
+			FirstName: userRequest.FirstName,
+			LastName: userRequest.LastName,
+			Email: userRequest.Email,
+			Password: hashedPassword,
+			Role: userRequest.Role,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Token:        "",
+			RefreshToken: "",
+		}
+	
+
+		_, err = userCollection.InsertOne(ctx, user)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
 
-		c.JSON(http.StatusCreated, result)
+		
+		c.JSON(http.StatusCreated, gin.H{
+			"message":  "User registered successfully",
+			"user_id":  user.UserID,
+			"email":    user.Email,
+			"role":     user.Role,
+			"fullname": user.FirstName + " " + user.LastName,
+		})
 
 	}
 

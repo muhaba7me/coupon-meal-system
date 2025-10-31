@@ -16,9 +16,9 @@ func SetupProtectedRoutes(router *gin.Engine, client *mongo.Client) {
 	// ========================================
 	// EMPLOYEE ROUTES
 	// ========================================
+	router.POST("/register", controller.RegisterUser(client))
 	employee := protected.Group("/employees")
 	{
-		// CRUD operations
 		employee.POST("/", controller.CreateEmployee(client))
 		employee.GET("/", controller.GetAllEmployees(client))
 		employee.GET("/id/:id", controller.GetEmployeeByID(client))       

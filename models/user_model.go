@@ -13,13 +13,20 @@ type User struct {
 	LastName        string        `json:"last_name" bson:"last_name" validate:"required,min=2,max=100"`
 	Email           string        `json:"email" bson:"email" validate:"required,email"`
 	Password        string        `json:"password" bson:"password" validate:"required,min=6"`
-	Role            string        `json:"role" bson:"role" validate:"oneof=ADMIN USER"`
+	Role            string        `json:"role" bson:"role" validate:"oneof=ADMIN EMPLOYEE SUPPLIER"`
 	CreatedAt       time.Time     `json:"created_at" bson:"created_at"`
 	UpdatedAt       time.Time     `json:"update_at" bson:"update_at"`
 	Token           string        `json:"token" bson:"token"`
 	RefreshToken    string        `json:"refresh_token" bson:"refresh_token"`
 
 }
+ type UserRequest struct {
+            FirstName string `json:"first_name" binding:"required"`
+            LastName  string `json:"last_name" binding:"required"`
+            Email     string `json:"email" binding:"required,email"`
+            Password  string `json:"password" binding:"required,min=6"`
+            Role      string `json:"role" binding:"required,oneof=ADMIN EMPLOYEE SUPPLIER"`
+        }
 type UserLogin struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=6"`
