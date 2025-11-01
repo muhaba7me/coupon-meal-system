@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/muhaba7me/coupon-meal-system/database"
 	"github.com/muhaba7me/coupon-meal-system/models"
 	"github.com/muhaba7me/coupon-meal-system/utils"
@@ -28,36 +28,33 @@ func HashPassword(password string) (string, error) {
 
 func RegisterUser(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-         adminRole, _ := utils.GetRoleFromContext(c)
-		 if adminRole !="ADMIN"{
-			c.JSON(http.StatusForbidden, gin.H{"error":"Admin access required"})
-			return 
-		 }
-		 var userRequest models.UserRequest
-		 if err := c.ShouldBindJSON(&userRequest); err!=nil{
-			c.JSON(http.StatusBadRequest, gin.H{"error":"Invalid input data"})
-		 }
-
-	
-		validate := validator.New()
-
-		if err := validate.Struct(userRequest); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed", "details": err.Error()})
+		adminRole, _ := utils.GetRoleFromContext(c)
+		if adminRole != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 			return
 		}
 
-		hashedPassword, err := HashPassword(userRequest.Password)
+		var userRequest models.UserRequest
+		if err := c.ShouldBindJSON(&userRequest); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
+		// Normalize role (optional)
+		userRequest.Role = strings.ToUpper(strings.TrimSpace(userRequest.Role))
+
+		hashedPassword, err := HashPassword(userRequest.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Unable to hash password"})
 			return
 		}
-	var ctx, cancel = context.WithTimeout(c, 100*time.Second)
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-var userCollection *mongo.Collection = database.OpenCollection("users", client)
+
+		userCollection := database.OpenCollection("users", client)
 
 		count, err := userCollection.CountDocuments(ctx, bson.D{{Key: "email", Value: userRequest.Email}})
-
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing user"})
 			return
@@ -67,28 +64,25 @@ var userCollection *mongo.Collection = database.OpenCollection("users", client)
 			return
 		}
 
-        user := models.User{
-			UserID: bson.NewObjectID().Hex(),
-			FirstName: userRequest.FirstName,
-			LastName: userRequest.LastName,
-			Email: userRequest.Email,
-			Password: hashedPassword,
-			Role: userRequest.Role,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+		user := models.User{
+			UserID:       bson.NewObjectID().Hex(),
+			FirstName:    userRequest.FirstName,
+			LastName:     userRequest.LastName,
+			Email:        userRequest.Email,
+			Password:     hashedPassword,
+			Role:         userRequest.Role,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
 			Token:        "",
 			RefreshToken: "",
 		}
-	
 
 		_, err = userCollection.InsertOne(ctx, user)
-
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
 
-		
 		c.JSON(http.StatusCreated, gin.H{
 			"message":  "User registered successfully",
 			"user_id":  user.UserID,
@@ -96,10 +90,9 @@ var userCollection *mongo.Collection = database.OpenCollection("users", client)
 			"role":     user.Role,
 			"fullname": user.FirstName + " " + user.LastName,
 		})
-
 	}
-
 }
+
 
 func LoginUser(client *mongo.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {

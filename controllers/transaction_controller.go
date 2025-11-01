@@ -347,7 +347,6 @@ func ApproveTransaction(client *mongo.Client) gin.HandlerFunc {
 			})
 
 		} else {
-			// ===== REJECTED - Cancel Transaction =====
 
 			now := time.Now()
 			notes := req.Reason
